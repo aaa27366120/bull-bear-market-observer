@@ -1,0 +1,187 @@
+# 牛市熊市觀察儀表板：權重、錨點、門檻設定（對應 spec.md v0.3）
+# 所有數值皆為「初始研究設定」，不宣稱最佳，需以歷史資料校準。
+# 錨點格式：[原始值, 分數]；程式會依原始值排序後線性內插，超出範圍取端點值。
+# 單位說明：百分比類指標以「百分點數字」表示（例如 20 代表 20%）；利率變化單位為 bp。
+
+version: "0.3"
+
+# 資料有效期限（自觀測日期起算，單位：天）。對應 spec 第 6 節。
+freshness_days:
+  daily: 7        # 5 個交易日，換算成日曆天約 7 天
+  weekly: 14
+  monthly: 75
+
+# 完整度門檻。對應 spec 第 6 節與 D9。
+completeness:
+  ok: 0.80              # >= 此值：正常顯示
+  reference_only: 0.60  # 介於 reference_only 與 ok：僅供參考；低於 reference_only：資料不足
+  dimension_min: 0.50   # 構面完整度低於此值，該構面不計入總分
+
+# 五段燈號（每 20 分一格，D10）。index 0 代表分數 0～20。
+lights:
+  regime:   # A：分數越高越偏多
+    - {color: red,         label: 疲弱}
+    - {color: orange,      label: 偏弱}
+    - {color: yellow,      label: 中性}
+    - {color: yellow_green, label: 偏強}
+    - {color: green,       label: 強勢}
+  stress:   # B：分數越高越有壓力
+    - {color: green,       label: 低壓力}
+    - {color: yellow_green, label: 壓力偏低}
+    - {color: yellow,      label: 中度壓力}
+    - {color: orange,      label: 高壓力}
+    - {color: red,         label: 危機級}
+
+# ---------------------------------------------------------------------------
+# 分數 A：市場環境分數 regime_score（-100～+100）
+# 總分 = 2 x (構面加權平均 - 50)
+# ---------------------------------------------------------------------------
+regime:
+  state_overlay:
+    drawdown_cap_pct: 20   # S&P 500 回檔超過此值，狀態最多顯示「盤整」
+  dimensions:
+    - id: equity_trend
+      name: 股市趨勢
+      weight: 0.35
+      indicators:
+        - id: spx_vs_200dma
+          name: S&P 500 相對 200 日均線乖離
+          unit: "%"
+          freq: daily
+          weight: 0.45
+          anchors: [[-10, 0], [0, 50], [10, 100]]
+        - id: spx_200dma_slope
+          name: S&P 500 的 200 日均線 20 日斜率
+          unit: "%"
+          freq: daily
+          weight: 0.20
+          anchors: [[-3, 0], [0, 50], [3, 100]]
+        - id: twii_vs_60dma
+          name: 台股加權相對 60 日均線乖離
+          unit: "%"
+          freq: daily
+          weight: 0.35
+          anchors: [[-8, 0], [0, 50], [8, 100]]
+
+    - id: liquidity_policy
+      name: 流動性與政策
+      weight: 0.25
+      indicators:
+        - id: fed_balance_sheet_13w
+          name: Fed 資產負債表 13 週變化
+          unit: "%"
+          freq: weekly
+          weight: 0.40
+          anchors: [[-2, 0], [0, 50], [2, 100]]
+        - id: fed_funds_3m_change
+          name: 聯邦基金利率 3 個月變化
+          unit: bp
+          freq: daily
+          weight: 0.30
+          anchors: [[-100, 100], [-50, 85], [0, 60], [25, 35], [100, 0]]
+        - id: broad_dollar_3m
+          name: 廣義美元指數 3 個月變化
+          unit: "%"
+          freq: daily
+          weight: 0.30
+          anchors: [[-6, 100], [-3, 85], [0, 65], [3, 40], [6, 0]]
+
+    - id: economy
+      name: 景氣
+      weight: 0.25
+      indicators:
+        - id: yield_curve_10y3m
+          name: 10 年減 3 個月殖利率
+          unit: pp
+          freq: daily
+          weight: 0.40
+          anchors: [[-1.0, 0], [0, 35], [0.5, 60], [2.0, 100]]
+        - id: sahm_rule
+          name: Sahm Rule
+          unit: pp
+          freq: monthly
+          weight: 0.40
+          anchors: [[0, 100], [0.1, 80], [0.3, 50], [0.5, 20], [0.8, 0]]
+        - id: initial_claims_13w
+          name: 初領失業金 4 週均值，13 週變化
+          unit: "%"
+          freq: weekly
+          weight: 0.20
+          anchors: [[-10, 100], [0, 65], [10, 35], [20, 0]]
+
+    - id: risk_sentiment
+      name: 避險情緒
+      weight: 0.15
+      indicators:
+        - id: vix_term_structure
+          name: VIX / VIX3M
+          unit: ratio
+          freq: daily
+          weight: 0.50
+          anchors: [[0.75, 100], [0.8, 90], [0.9, 60], [1.0, 30], [1.1, 0]]
+        - id: spx_drawdown_52w
+          name: S&P 500 距 52 週高點回檔幅度
+          unit: "%"
+          freq: daily
+          weight: 0.50
+          anchors: [[0, 100], [5, 80], [10, 50], [20, 15], [25, 0]]
+
+# ---------------------------------------------------------------------------
+# 分數 B：金融壓力分數 financial_stress_score（0～100，越高越有壓力）
+# ---------------------------------------------------------------------------
+stress:
+  blocks:
+    - id: financial_stress
+      name: 金融壓力指標
+      weight: 0.70
+      indicators:
+        - id: hy_oas
+          name: 高收益債利差（HY OAS）
+          unit: "%"
+          freq: daily
+          weight: 0.40
+          anchors: [[3, 0], [4, 25], [6, 60], [8, 85], [10, 100]]
+        - id: nfci
+          name: 芝加哥聯準銀行金融狀況指數（NFCI）
+          unit: index
+          freq: weekly
+          weight: 0.30
+          anchors: [[-0.6, 0], [-0.3, 25], [0, 55], [0.5, 80], [1.0, 100]]
+        - id: stlfsi4
+          name: 聖路易聯準銀行金融壓力指數（STLFSI4）
+          unit: index
+          freq: weekly
+          weight: 0.30
+          anchors: [[-1, 0], [0, 40], [1, 60], [2, 75], [4, 90], [6, 100]]
+    - id: vix_level
+      name: VIX 水位
+      weight: 0.30
+      indicators:
+        - id: vix
+          name: VIX
+          unit: index
+          freq: daily
+          weight: 1.00
+          anchors: [[12, 0], [20, 30], [30, 60], [40, 85], [50, 100]]
+
+# ---------------------------------------------------------------------------
+# 警示旗標（對應 spec 第 7 節）
+# ---------------------------------------------------------------------------
+flags:
+  gold_equity_drop:
+    window_trading_days: 10
+    spx_return_max_pct: -4      # S&P 500 <= -4%
+    gold_return_max_pct: -3     # 黃金 <= -3%
+    red_if_any:
+      stress_score_min: 60
+      vix_min: 30               # VIX > 30
+      hy_oas_week_change_min_pp: 0.5
+  turning_point:
+    lookback_trading_days: 60
+    precondition_stress_min: 60
+    required_conditions: 3
+    fed_balance_sheet_weeks: 4
+    emergency_cut_bp: 50
+    stress_block_drop_points: 15
+    vix_drop_from_peak_pct: 30
+    no_new_low_days: 20
