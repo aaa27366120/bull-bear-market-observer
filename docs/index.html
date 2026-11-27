@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>牛熊市觀察儀表板</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1d2330;--sub:#5d6677;--line:#e3e6ec;--accent-a:#2f6fdb;--accent-b:#7a4fd0;
+--g:#2e9e5b;--yg:#8bc34a;--y:#e0b400;--o:#ef8a1f;--r:#d64545;box-sizing:border-box;
+padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0)}
+@media (prefers-color-scheme:dark){:root{--bg:#0f131a;--card:#171c26;--text:#e8ebf2;--sub:#9aa4b6;--line:#2a3140;--accent-a:#6ea0ff;--accent-b:#b394f5}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 2px}h2{font-size:16px;margin:0}
+.sub{color:var(--sub);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+.card.a{border-top:4px solid var(--accent-a)}.card.b{border-top:4px solid var(--accent-b)}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.big{font-size:34px;font-weight:700;line-height:1.1}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;color:#fff;font-size:13px;font-weight:600;background:var(--c,#888)}
+.chip.y{color:#222}
+.gauge{position:relative;height:12px;border-radius:6px;margin:14px 0 4px}
+.gauge.a{background:linear-gradient(90deg,var(--r),var(--o),var(--y),var(--yg),var(--g))}
+.gauge.b{background:linear-gradient(90deg,var(--g),var(--yg),var(--y),var(--o),var(--r))}
+.gauge i{position:absolute;top:-4px;width:4px;height:20px;background:var(--text);border-radius:2px;transform:translateX(-50%)}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line)}
+.row .n{flex:1}.row .w{color:var(--sub);font-size:12px}
+.strip{display:flex;gap:2px;margin:0 6px}.strip s{display:block;width:14px;height:8px;border-radius:2px;opacity:.25;text-decoration:none}.strip s.on{opacity:1}
+details{border-top:1px solid var(--line)}summary{cursor:pointer;padding:9px 0}details .row{padding-left:12px}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0}
+.warn{background:#fff4e0;color:#7a4a00;border:1px solid #f0c987;border-radius:10px;padding:10px 12px;margin:12px 0;font-size:14px}
+@media (prefers-color-scheme:dark){.warn{background:#3a2b10;color:#ffd99a;border-color:#6b4d16}}
+.flag{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line)}
+.flag b{min-width:92px}
+footer{font-size:12px;color:var(--sub);margin:18px 0 28px}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-top:1px solid var(--line);padding:5px 6px;text-align:left}
+</style>
+</head>
+<body>
+<main>
+<h1>牛熊市觀察儀表板</h1>
+<div class="sub" id="updated">載入中…</div>
+<div id="stale"></div>
+<section class="card a" id="a"></section>
+<section class="card b" id="b"></section>
+<section class="card" id="flags"></section>
+<section class="card">
+<h2>如何判讀兩個分數</h2>
+<table>
+<tr><th>A 環境</th><th>B 壓力</th><th>解讀</th></tr>
+<tr><td>偏多</td><td>低</td><td>一般牛市狀態</td></tr>
+<tr><td>偏多</td><td>升高</td><td>背離，值得留意</td></tr>
+<tr><td>偏空</td><td>高</td><td>危機中，觀察「轉折確認」</td></tr>
+<tr><td>偏空</td><td>回落</td><td>可能接近轉折</td></tr>
+</table>
+<p class="note">這是個人觀察工具，不構成投資建議。分數與門檻都是初始設定，尚未經歷史回測校準。</p>
+</section>
+<section class="card">
+<h2>計算方式</h2>
+<details><summary>A 市場環境分數（-100～+100，越高越偏多）</summary>
+<p class="note">四個構面加權：股市趨勢 35%、流動性與政策 25%、景氣 25%、避險情緒 15%。每個指標先換算成 0～100 分，構面內加權平均，總分 = 2 ×（加權平均 − 50）。S&amp;P 500 距 52 週高點回檔超過 20% 時，狀態最多顯示「盤整」。</p></details>
+<details><summary>B 金融壓力分數（0～100，越高越有壓力）</summary>
+<p class="note">金融壓力指標 70%（高收益債利差 40%、NFCI 30%、STLFSI4 30%）加上 VIX 30%。為避免從公開數字反推原始資料，指標與區塊只顯示燈號，不顯示分數。</p></details>
+<details><summary>缺值與資料完整度</summary>
+<p class="note">缺少的指標不會當成 0，而是依剩餘指標重新分配權重。整體完整度 80% 以上正常顯示，60%～80% 標示「僅供參考」，低於 60% 顯示「資料不足」。</p></details>
+<details><summary>已知限制</summary>
+<p class="note">B 內部的高收益債利差、STLFSI4、VIX 有重疊的輸入；STLFSI4 的成分也包含 A 使用的殖利率曲線與聯邦基金利率，所以 A 與 B 是「分開計算」，不是完全獨立。NFCI 與 STLFSI4 為週資料，歷史值會被修正。</p></details>
+</section>
+<footer id="foot"></footer>
+</main>
+<script>
+const PAL={green:'var(--g)',yellow_green:'var(--yg)',yellow:'var(--y)',orange:'var(--o)',red:'var(--r)'};
+const ORDER_A=['red','orange','yellow','yellow_green','green'];
+const ORDER_B=['green','yellow_green','yellow','orange','red'];
+const SRC={spx:'S&P 500',twii:'台股加權',gold:'黃金',hy_oas:'高收益債利差',vix:'VIX',vix3m:'VIX3M',dff:'聯邦基金利率',dollar:'美元指數',t10y3m:'10年減3個月殖利率',nfci:'NFCI',stlfsi4:'STLFSI4',walcl:'Fed資產負債表',icsa:'初領失業金',sahm:'Sahm Rule'};
+const $=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+function chip(l){const s=$('span','chip'+(l.color==='yellow'||l.color==='yellow_green'?' y':''),l.label);s.style.setProperty('--c',PAL[l.color]);return s}
+function strip(l,order){const d=$('span','strip');order.forEach(c=>{const s=document.createElement('s');s.style.background=PAL[c];if(c===l.color)s.className='on';d.appendChild(s)});return d}
+function gauge(kind,pos){const g=$('div','gauge '+kind);const i=document.createElement('i');i.style.left=Math.max(0,Math.min(100,pos))+'%';g.appendChild(i);return g}
+function statusNote(st){return st==='reference_only'?'資料完整度偏低，僅供參考。':st==='insufficient'?'資料不足，暫不給出分類。':''}
+function groupRows(parent,groups,order,showScore){
+  groups.forEach(g=>{
+    const det=document.createElement('details');const sum=document.createElement('summary');
+    const r=$('span','');r.style.cssText='display:inline-flex;justify-content:space-between;align-items:center;width:calc(100% - 18px);gap:8px;vertical-align:middle';
+    const n=$('span','n',g.name+'（'+Math.round(g.weight*100)+'%）');n.style.flex='1';
+    r.appendChild(n);
+    if(!g.included)r.appendChild($('span','w','資料不足，未計入'));
+    else{if(showScore&&g.score!=null)r.appendChild($('span','w',g.score.toFixed(0)));if(g.light){r.appendChild(strip(g.light,order));r.appendChild(chip(g.light))}}
+    sum.appendChild(r);det.appendChild(sum);
+    g.indicators.forEach(i=>{const row=$('div','row');row.appendChild($('span','n',i.name));if(i.light){row.appendChild(strip(i.light,order));row.appendChild(chip(i.light))}else row.appendChild($('span','w','缺資料'));det.appendChild(row)});
+    parent.appendChild(det)})}
+function renderA(a){
+  const el=document.getElementById('a');el.replaceChildren();
+  const h=$('div','head');const l=$('div');l.appendChild($('h2','','A　市場環境分數'));l.appendChild($('div','sub','越高越偏多（-100～+100）'));h.appendChild(l);
+  const r=$('div');r.style.textAlign='right';
+  if(a.score!=null){r.appendChild($('div','big',(a.score>0?'+':'')+a.score.toFixed(0)));const s=$('div');s.appendChild(chip(a.light));s.appendChild($('span','sub','　'+a.state));r.appendChild(s)}
+  else r.appendChild($('div','big','—'));
+  h.appendChild(r);el.appendChild(h);
+  if(a.score!=null){el.appendChild(gauge('a',(a.score+100)/2));const sc=$('div','scale');['熊市 -100','0','牛市 +100'].forEach(t=>sc.appendChild($('span','',t)));el.appendChild(sc)}
+  const n=statusNote(a.status);if(n)el.appendChild($('p','note',n));
+  if(a.capped_by_drawdown)el.appendChild($('p','note','S&P 500 回檔已超過 20%，狀態上限為「盤整」。'));
+  const box=$('div');box.style.marginTop='10px';groupRows(box,a.dimensions,ORDER_A,true);el.appendChild(box);
+  el.appendChild($('p','note','資料完整度 '+Math.round(a.completeness*100)+'%'))}
+function renderB(b){
+  const el=document.getElementById('b');el.replaceChildren();
+  const h=$('div','head');const l=$('div');l.appendChild($('h2','','B　金融壓力分數'));l.appendChild($('div','sub','越高越有壓力（0～100）'));h.appendChild(l);
+  const r=$('div');r.style.textAlign='right';
+  if(b.score!=null){r.appendChild($('div','big',b.score.toFixed(0)));r.appendChild(chip(b.light))}else r.appendChild($('div','big','—'));
+  h.appendChild(r);el.appendChild(h);
+  if(b.score!=null){el.appendChild(gauge('b',b.score));const sc=$('div','scale');['低壓力 0','50','危機級 100'].forEach(t=>sc.appendChild($('span','',t)));el.appendChild(sc)}
+  const n=statusNote(b.status);if(n)el.appendChild($('p','note',n));
+  const box=$('div');box.style.marginTop='10px';groupRows(box,b.blocks,ORDER_B,false);el.appendChild(box);
+  el.appendChild($('p','note','資料完整度 '+Math.round(b.completeness*100)+'%'))}
+function renderFlags(f){
+  const el=document.getElementById('flags');el.replaceChildren();el.appendChild($('h2','','警示旗標'));
+  const g=f.gold_equity_drop,t=f.turning_point;
+  const gm={none:['無警示','green'],yellow:['黃色：股票與黃金同步下跌，但信用與恐慌指標尚未惡化，待確認'+(g.confirmation_unknown?'（確認資料不足）':''),'yellow'],red:['紅色：股票與黃金同步下跌，且壓力指標惡化','red'],unknown:['資料不足','yellow']}[g.state]||['資料不足','yellow'];
+  const tm={not_evaluated:['近期沒有出現高壓力，無危機可轉折','green'],met:['危機可能出現轉折（4 項條件成立 '+t.met_count+' 項）','yellow_green'],not_met:['尚未確認轉折（4 項條件成立 '+t.met_count+' 項，需 3 項）','orange'],insufficient:['資料不足','yellow']}[t.state]||['資料不足','yellow'];
+  [['股金同跌',gm],['轉折確認',tm]].forEach(([n,[txt,c]])=>{const d=$('div','flag');d.appendChild($('b','',n));const s=$('span','',txt);const dot=$('span','chip','●');dot.style.setProperty('--c',PAL[c]);d.appendChild(dot);d.appendChild(s);el.appendChild(d)})}
+function fmtTW(iso){const d=new Date(iso);return d.toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+function renderMeta(d){
+  document.getElementById('updated').textContent='資料更新時間（台灣時間）：'+fmtTW(d.generated_at);
+  const days=(Date.now()-new Date(d.generated_at).getTime())/86400000;
+  if(days>5){const w=$('div','warn','資料已超過 5 天沒有更新，目前顯示的是舊資料。請檢查 GitHub Actions 是否正常執行。');document.getElementById('stale').replaceChildren(w)}
+  const f=document.getElementById('foot');f.replaceChildren();
+  const det=document.createElement('details');const s=document.createElement('summary');s.textContent='各資料最新日期';det.appendChild(s);
+  const p=$('p','note',Object.entries(d.data_dates).map(([k,v])=>(SRC[k]||k)+' '+(v||'—')).join('　｜　'));det.appendChild(p);f.appendChild(det);
+  f.appendChild($('p','','資料來源：FRED／聖路易聯邦準備銀行（STLFSI4）、芝加哥聯邦準備銀行（NFCI）、ICE Data Indices（高收益債利差）、CBOE（VIX）、S&P Dow Jones Indices（S&P 500）、美國勞工部、Fed 理事會、Claudia Sahm（Sahm Rule）、Yahoo Finance。本頁只顯示計算後的分數與燈號，不顯示第三方原始數值。'))}
+fetch('data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(d=>{renderMeta(d);renderA(d.regime);renderB(d.stress);renderFlags(d.flags)}).catch(()=>{document.getElementById('updated').textContent='無法載入 data.json，請確認 GitHub Actions 已成功執行並產生資料。'});
+</script>
+</body>
+</html>
