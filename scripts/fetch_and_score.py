@@ -17,7 +17,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, time as dtime, timezone
 from typing import Any, Optional
 
 import pandas as pd
@@ -52,6 +52,23 @@ YAHOO_SERIES = {
     "twii": ["^TWII"],
     "gold": ["GC=F", "GLD"],
 }
+
+# 各市場「當日資料定稿」的時間（UTC，保留緩衝）。在此之前，當天的那一筆是盤中資料，必須丟掉。
+#   S&P 500：美東 16:00 收盤 = UTC 21:00（冬令）；台股：13:30 收盤 = UTC 05:30；
+#   黃金期貨（GC=F）：美東 17:00 結束 = UTC 22:00。
+MARKET_FINAL_UTC = {"spx": (21, 30), "twii": (6, 0), "gold": (22, 15)}
+
+
+def drop_unfinished_last_bar(s: Optional[pd.Series], now_utc: datetime, final_hm: tuple[int, int]) -> Optional[pd.Series]:
+    """若最後一筆是「今天」且還沒到定稿時間，就是盤中資料，丟掉；日期在未來的也丟掉。"""
+    if s is None or s.empty:
+        return s
+    last = s.index[-1].date()
+    today = now_utc.date()
+    final_at = datetime.combine(today, dtime(*final_hm), tzinfo=timezone.utc)
+    if last > today or (last == today and now_utc < final_at):
+        return s.iloc[:-1] if len(s) > 1 else None
+    return s
 
 
 def log(message: str) -> None:
@@ -134,7 +151,8 @@ def fetch_yahoo(symbols: list[str], period: str = "3y") -> tuple[Optional[pd.Ser
 # ---------------------------------------------------------------------------
 
 
-def load_all(api_key: str, today: datetime) -> dict[str, Optional[pd.Series]]:
+def load_all(api_key: str, today: datetime, now_utc: Optional[datetime] = None) -> dict[str, Optional[pd.Series]]:
+    now_utc = now_utc or datetime.now(timezone.utc)
     start = (today - pd.Timedelta(days=500)).strftime("%Y-%m-%d")
     series: dict[str, Optional[pd.Series]] = {}
     for key, fred_id in FRED_SERIES.items():
@@ -144,6 +162,11 @@ def load_all(api_key: str, today: datetime) -> dict[str, Optional[pd.Series]]:
             log(f"  FRED {fred_id}: 成功，最新觀測日期 {s.index[-1].strftime('%Y-%m-%d')}")
     for key, symbols in YAHOO_SERIES.items():
         s, used = fetch_yahoo(symbols)
+        if s is not None:
+            trimmed = drop_unfinished_last_bar(s, now_utc, MARKET_FINAL_UTC[key])
+            if trimmed is None or len(trimmed) != len(s):
+                log(f"  Yahoo {used}: 最後一筆尚未收盤，已丟棄")
+            s = trimmed
         series[key] = s
         if s is not None:
             log(f"  Yahoo {used}: 成功，最新觀測日期 {s.index[-1].strftime('%Y-%m-%d')}")
@@ -172,7 +195,7 @@ def main() -> int:
 
     now = datetime.now(timezone.utc)
     log(f"開始抓資料：{now.strftime('%Y-%m-%d %H:%M')} UTC")
-    series = load_all(api_key, pd.Timestamp(now.date()))
+    series = load_all(api_key, pd.Timestamp(now.date()), now)
 
     public = pipeline.build(series, cfg, now.date(), now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     log(f"A 狀態：{public['regime']['status']}，完整度 {public['regime']['completeness']}")
