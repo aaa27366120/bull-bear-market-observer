@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-27T05:10:57Z",
+  "data_dates": {
+    "spx": "2026-11-25",
+    "twii": "2026-11-27",
+    "gold": "2026-11-27",
+    "hy_oas": "2026-11-24",
+    "vix": "2026-11-24",
+    "vix3m": "2026-11-24",
+    "dff": "2026-11-24",
+    "dollar": "2026-11-20",
+    "t10y3m": "2026-11-25",
+    "nfci": "2026-11-20",
+    "stlfsi4": "2026-11-20",
+    "walcl": "2026-11-18",
+    "icsa": "2026-11-21",
+    "sahm": "2026-10-01"
+  },
+  "regime": {
+    "status": "ok",
+    "score": -9.4,
+    "state": "盤整",
+    "light": {
+      "color": "yellow",
+      "label": "中性"
+    },
+    "capped_by_drawdown": false,
+    "completeness": 1.0,
+    "dimensions": [
+      {
+        "id": "equity_trend",
+        "name": "股市趨勢",
+        "weight": 0.35,
+        "included": true,
+        "score": 29.6,
+        "light": {
+          "color": "orange",
+          "label": "偏弱"
+        },
+        "completeness": 1.0,
+        "indicators": [
+          {
+            "id": "spx_vs_200dma",
+            "name": "S&P 500 相對 200 日均線乖離",
+            "light": {
+              "color": "orange",
+              "label": "偏弱"
+            }
+          },
+          {
+            "id": "spx_200dma_slope",
+            "name": "S&P 500 的 200 日均線 20 日斜率",
+            "light": {
+              "color": "yellow_green",
+              "label": "偏強"
+            }
+          },
+          {
+            "id": "twii_vs_60dma",
+            "name": "台股加權相對 60 日均線乖離",
+            "light": {
+              "color": "red",
+              "label": "疲弱"
+            }
+          }
+        ]
+      },
+      {
+        "id": "liquidity_policy",
+        "name": "流動性與政策",
+        "weight": 0.25,
+        "included": true,
+        "score": 35.1,
+        "light": {
+          "color": "orange",
+          "label": "偏弱"
+        },
+        "completeness": 1.0,
+        "indicators": [
+          {
+            "id": "fed_balance_sheet_13w",
+            "name": "Fed 資產負債表 13 週變化",
+            "light": {
+              "color": "yellow",
+              "label": "中性"
+            }
+          },
+          {
+            "id": "fed_funds_3m_change",
+            "name": "聯邦基金利率 3 個月變化",
+            "light": {
+              "color": "orange",
+              "label": "偏弱"
+            }
+          },
+          {
+            "id": "broad_dollar_3m",
+            "name": "廣義美元指數 3 個月變化",
+            "light": {
+              "color": "red",
+              "label": "疲弱"
+            }
+          }
+        ]
+      },
+      {
+        "id": "economy",
+        "name": "景氣",
+        "weight": 0.25,
+        "included": true,
+        "score": 80.4,
+        "light": {
+          "color": "green",
+          "label": "強勢"
+        },
+        "completeness": 1.0,
+        "indicators": [
+          {
+            "id": "yield_curve_10y3m",
+            "name": "10 年減 3 個月殖利率",
+            "light": {
+              "color": "yellow_green",
+              "label": "偏強"
+            }
+          },
+          {
+            "id": "sahm_rule",
+            "name": "Sahm Rule",
+            "light": {
+              "color": "green",
+              "label": "強勢"
+            }
+          },
+          {
+            "id": "initial_claims_13w",
+            "name": "初領失業金 4 週均值，13 週變化",
+            "light": {
+              "color": "green",
+              "label": "強勢"
+            }
+          }
+        ]
+      },
+      {
+        "id": "risk_sentiment",
+        "name": "避險情緒",
+        "weight": 0.15,
+        "included": true,
+        "score": 40.4,
+        "light": {
+          "color": "yellow",
+          "label": "中性"
+        },
+        "completeness": 1.0,
+        "indicators": [
+          {
+            "id": "vix_term_structure",
+            "name": "VIX / VIX3M",
+            "light": {
+              "color": "red",
+              "label": "疲弱"
+            }
+          },
+          {
+            "id": "spx_drawdown_52w",
+            "name": "S&P 500 距 52 週高點回檔幅度",
+            "light": {
+              "color": "yellow_green",
+              "label": "偏強"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "stress": {
+    "status": "ok",
+    "score": 30.3,
+    "light": {
+      "color": "yellow_green",
+      "label": "壓力偏低"
+    },
+    "completeness": 1.0,
+    "blocks": [
+      {
+        "id": "financial_stress",
+        "name": "金融壓力指標",
+        "weight": 0.7,
+        "included": true,
+        "score": null,
+        "light": {
+          "color": "yellow_green",
+          "label": "壓力偏低"
+        },
+        "completeness": 1.0,
+        "indicators": [
+          {
+            "id": "hy_oas",
+            "name": "高收益債利差（HY OAS）",
+            "light": {
+              "color": "green",
+              "label": "低壓力"
+            }
+          },
+          {
+            "id": "nfci",
+            "name": "芝加哥聯準銀行金融狀況指數（NFCI）",
+            "light": {
+              "color": "green",
+              "label": "低壓力"
+            }
+          },
+          {
+            "id": "stlfsi4",
+            "name": "聖路易聯準銀行金融壓力指數（STLFSI4）",
+            "light": {
+              "color": "yellow_green",
+              "label": "壓力偏低"
+            }
+          }
+        ]
+      },
+      {
+        "id": "vix_level",
+        "name": "VIX 水位",
+        "weight": 0.3,
+        "included": true,
+        "score": null,
+        "light": {
+          "color": "yellow",
+          "label": "中度壓力"
+        },
+        "completeness": 1.0,
+        "indicators": [
+          {
+            "id": "vix",
+            "name": "VIX",
+            "light": {
+              "color": "yellow",
+              "label": "中度壓力"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "flags": {
+    "gold_equity_drop": {
+      "state": "yellow",
+      "confirmation_unknown": false
+    },
+    "turning_point": {
+      "state": "not_evaluated"
+    }
+  }
+}
