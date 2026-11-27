@@ -125,5 +125,46 @@ class MainTests(unittest.TestCase):
         self.assertEqual(content, previous)
 
 
+class DropUnfinishedBarTests(unittest.TestCase):
+    def s(self, last_day):
+        ix = pd.DatetimeIndex(["2026-11-24", "2026-11-25", last_day])
+        return pd.Series([1.0, 2.0, 3.0], index=ix)
+
+    def utc(self, text):
+        return datetime.strptime(text, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+
+    def test_taiwan_intraday_manual_run_is_dropped(self):
+        # 台灣時間 13:10（UTC 05:10）手動執行：台股還沒收盤，今天那一筆是盤中資料
+        out = fs.drop_unfinished_last_bar(self.s("2026-11-27"), self.utc("2026-11-27 05:10"), fs.MARKET_FINAL_UTC["twii"])
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out.index[-1], pd.Timestamp("2026-11-25"))
+
+    def test_taiwan_after_close_is_kept(self):
+        # 排程時間 UTC 22:30（台灣隔日 06:30）：台股當天早已收盤
+        out = fs.drop_unfinished_last_bar(self.s("2026-11-27"), self.utc("2026-11-27 22:30"), fs.MARKET_FINAL_UTC["twii"])
+        self.assertEqual(len(out), 3)
+
+    def test_us_session_in_progress_is_dropped_and_after_close_kept(self):
+        spx = fs.MARKET_FINAL_UTC["spx"]
+        self.assertEqual(len(fs.drop_unfinished_last_bar(self.s("2026-11-27"), self.utc("2026-11-27 15:00"), spx)), 2)
+        self.assertEqual(len(fs.drop_unfinished_last_bar(self.s("2026-11-27"), self.utc("2026-11-27 22:30"), spx)), 3)
+
+    def test_gold_futures_scheduled_run_keeps_the_day(self):
+        gold = fs.MARKET_FINAL_UTC["gold"]
+        self.assertEqual(len(fs.drop_unfinished_last_bar(self.s("2026-11-27"), self.utc("2026-11-27 05:10"), gold)), 2)
+        self.assertEqual(len(fs.drop_unfinished_last_bar(self.s("2026-11-27"), self.utc("2026-11-27 22:30"), gold)), 3)
+
+    def test_previous_day_bar_is_kept(self):
+        out = fs.drop_unfinished_last_bar(self.s("2026-11-26"), self.utc("2026-11-27 05:10"), fs.MARKET_FINAL_UTC["twii"])
+        self.assertEqual(len(out), 3)
+
+    def test_future_dated_bar_is_dropped(self):
+        out = fs.drop_unfinished_last_bar(self.s("2026-11-28"), self.utc("2026-11-27 22:30"), fs.MARKET_FINAL_UTC["spx"])
+        self.assertEqual(len(out), 2)
+
+    def test_none_and_empty(self):
+        self.assertIsNone(fs.drop_unfinished_last_bar(None, self.utc("2026-11-27 05:10"), (6, 0)))
+
+
 if __name__ == "__main__":
     unittest.main()
