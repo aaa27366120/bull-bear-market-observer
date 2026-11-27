@@ -1,25 +1,25 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-27T05:10:57Z",
+  "generated_at": "2026-11-27T23:23:54Z",
   "data_dates": {
-    "spx": "2026-11-25",
-    "twii": "2026-11-27",
+    "spx": "2026-11-27",
+    "twii": "2026-11-26",
     "gold": "2026-11-27",
-    "hy_oas": "2026-11-24",
-    "vix": "2026-11-24",
-    "vix3m": "2026-11-24",
-    "dff": "2026-11-24",
+    "hy_oas": "2026-11-26",
+    "vix": "2026-11-26",
+    "vix3m": "2026-11-25",
+    "dff": "2026-11-26",
     "dollar": "2026-11-20",
-    "t10y3m": "2026-11-25",
+    "t10y3m": "2026-11-27",
     "nfci": "2026-11-20",
     "stlfsi4": "2026-11-20",
-    "walcl": "2026-11-18",
+    "walcl": "2026-11-25",
     "icsa": "2026-11-21",
     "sahm": "2026-10-01"
   },
   "regime": {
     "status": "ok",
-    "score": -9.4,
+    "score": -6.8,
     "state": "盤整",
     "light": {
       "color": "yellow",
@@ -33,7 +33,7 @@
         "name": "股市趨勢",
         "weight": 0.35,
         "included": true,
-        "score": 29.6,
+        "score": 32.9,
         "light": {
           "color": "orange",
           "label": "偏弱"
@@ -44,8 +44,8 @@
             "id": "spx_vs_200dma",
             "name": "S&P 500 相對 200 日均線乖離",
             "light": {
-              "color": "orange",
-              "label": "偏弱"
+              "color": "yellow",
+              "label": "中性"
             }
           },
           {
@@ -71,7 +71,7 @@
         "name": "流動性與政策",
         "weight": 0.25,
         "included": true,
-        "score": 35.1,
+        "score": 35.9,
         "light": {
           "color": "orange",
           "label": "偏弱"
@@ -109,7 +109,7 @@
         "name": "景氣",
         "weight": 0.25,
         "included": true,
-        "score": 80.4,
+        "score": 81.3,
         "light": {
           "color": "green",
           "label": "強勢"
@@ -147,10 +147,10 @@
         "name": "避險情緒",
         "weight": 0.15,
         "included": true,
-        "score": 40.4,
+        "score": 38.6,
         "light": {
-          "color": "yellow",
-          "label": "中性"
+          "color": "orange",
+          "label": "偏弱"
         },
         "completeness": 1.0,
         "indicators": [
@@ -176,7 +176,7 @@
   },
   "stress": {
     "status": "ok",
-    "score": 30.3,
+    "score": 31.1,
     "light": {
       "color": "yellow_green",
       "label": "壓力偏低"
@@ -247,8 +247,7 @@
   },
   "flags": {
     "gold_equity_drop": {
-      "state": "yellow",
-      "confirmation_unknown": false
+      "state": "none"
     },
     "turning_point": {
       "state": "not_evaluated"
