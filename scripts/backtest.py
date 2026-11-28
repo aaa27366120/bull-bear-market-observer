@@ -67,14 +67,28 @@ def apply_publication_lag(S: dict[str, Optional[pd.Series]]) -> dict[str, Option
     return out
 
 
-def run_episode(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], start: str, end: str) -> list[dict[str, Any]]:
-    """S 必須已套用公布落後。逐一交易日重算並回傳每天的結果。"""
+def run_episode_detailed(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], start: str, end: str):
+    """S 必須已套用公布落後。逐一交易日重算，回傳 (每天的公開結果, 每天的內部細節)。
+
+    內部細節含第三方資料衍生的數值（如 VIX），只用於診斷與敏感度分析，不會寫入任何輸出檔。
+    """
     spx = S["spx"]
     days = spx.loc[start:end].index
-    rows = []
+    red_cfg = cfg["flags"]["gold_equity_drop"]["red_if_any"]
+    rows, internals = [], []
     for d in days:
         sl = {k: (None if v is None else v.loc[:d].iloc[-HISTORY_ROWS:]) for k, v in S.items()}
-        out = pipeline.build(sl, cfg, d.date(), d.strftime("%Y-%m-%dT00:00:00Z"))
+        out, det = pipeline.build_detailed(sl, cfg, d.date(), d.strftime("%Y-%m-%dT00:00:00Z"))
+        gold_state = out["flags"]["gold_equity_drop"]["state"]
+        b, vix = det["stress_score"], det["features"].get("vix")
+        reason = ""
+        if gold_state == "red":
+            parts = []
+            if b is not None and b >= red_cfg["stress_score_min"]:
+                parts.append("B≥%d" % red_cfg["stress_score_min"])
+            if vix is not None and vix > red_cfg["vix_min"]:
+                parts.append("VIX>%d" % red_cfg["vix_min"])
+            reason = "+".join(parts) or "HY 利差"
         rows.append(
             {
                 "date": d.strftime("%Y-%m-%d"),
@@ -86,11 +100,51 @@ def run_episode(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], start: s
                 "b_label": (out["stress"]["light"] or {}).get("label"),
                 "b_status": out["stress"]["status"],
                 "b_completeness": out["stress"]["completeness"],
-                "gold_equity": out["flags"]["gold_equity_drop"]["state"],
+                "gold_equity": gold_state,
+                "red_reason": reason,
                 "turning_point": out["flags"]["turning_point"]["state"],
             }
         )
-    return rows
+        internals.append(
+            {"triggered": det["gold_triggered"], "b_score": b, "vix": vix,
+             "had_high": det["had_high"], "conditions": det["conditions"]}
+        )
+    return rows, internals
+
+
+def run_episode(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], start: str, end: str) -> list[dict[str, Any]]:
+    return run_episode_detailed(S, cfg, start, end)[0]
+
+
+# ---------------------------------------------------------------------------
+# 敏感度：股金同跌的紅色條件換成不同的 VIX 門檻，三次下跌各會有幾天紅色
+# ---------------------------------------------------------------------------
+
+# (名稱, B 門檻, VIX 門檻；None 代表不使用 VIX 條件)。歷史上沒有 HY OAS，所以這裡不含利差條件。
+VARIANTS = [
+    ("基準：B≥60 或 VIX>30", 60, 30),
+    ("B≥60 或 VIX>35", 60, 35),
+    ("B≥60 或 VIX>40", 60, 40),
+    ("只看 B≥60（不用 VIX）", 60, None),
+]
+
+
+def classify_gold_flag(it: dict[str, Any], b_thr: float, vix_thr: Optional[float]) -> str:
+    if not it["triggered"]:
+        return "none"
+    b_hit = it["b_score"] is not None and it["b_score"] >= b_thr
+    v_hit = vix_thr is not None and it["vix"] is not None and it["vix"] > vix_thr
+    return "red" if (b_hit or v_hit) else "yellow"
+
+
+def sensitivity(internals_by_ep: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    table = {}
+    for name, b_thr, vix_thr in VARIANTS:
+        table[name] = {}
+        for ep_id, its in internals_by_ep.items():
+            states = [classify_gold_flag(it, b_thr, vix_thr) for it in its]
+            table[name][ep_id] = (states.count("red"), states.count("yellow"))
+    return {"variants": [v[0] for v in VARIANTS], "table": table}
 
 
 # ---------------------------------------------------------------------------
@@ -125,13 +179,15 @@ def _day_gap(a: Optional[str], b: Optional[str]) -> Optional[int]:
     return (pd.Timestamp(a) - pd.Timestamp(b)).days
 
 
-def summarize(rows: list[dict[str, Any]], ep: dict[str, Any], spx: pd.Series) -> dict[str, Any]:
+def summarize(rows: list[dict[str, Any]], ep: dict[str, Any], spx: pd.Series,
+              internals: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
     df = pd.DataFrame(rows)
     n = len(df)
     s: dict[str, Any] = {"id": ep["id"], "name": ep["name"], "days": n}
     s["a_ok_pct"] = round(100 * (df["a_status"] == "ok").mean(), 1)
     s["b_ok_pct"] = round(100 * (df["b_status"] == "ok").mean(), 1)
     s["b_insufficient_pct"] = round(100 * (df["b_status"] == "insufficient").mean(), 1)
+    s["b_ref_pct"] = round(100 * (df["b_status"] == "reference_only").mean(), 1)
     s["a_states"] = df["a_state"].fillna("資料不足").value_counts().to_dict()
 
     bear = df["a_state"].isin(["偏空", "熊市"])
@@ -157,6 +213,21 @@ def summarize(rows: list[dict[str, Any]], ep: dict[str, Any], spx: pd.Series) ->
     s["tp_first_met"] = _first(df, df["turning_point"] == "met")
     s["tp_met_days"] = int((df["turning_point"] == "met").sum())
     s["tp_states"] = df["turning_point"].value_counts().to_dict()
+    s["tp_met_ranges"] = _ranges(df, df["turning_point"] == "met")
+    s["red_reasons"] = df.loc[df["gold_equity"] == "red", "red_reason"].value_counts().to_dict()
+
+    # 轉折確認的條件診斷（需要內部細節）
+    if internals:
+        evaluated = [it for it in internals if it["had_high"]]
+        met_idx = [i for i, st in enumerate(df["turning_point"]) if st == "met"]
+
+        def rate(items, k):
+            known = [it["conditions"][k] for it in items if it["conditions"][k] is not None]
+            return None if not known else round(100 * sum(known) / len(known), 1)
+
+        s["cond_rate_evaluated"] = [rate(evaluated, k) for k in range(4)]
+        s["cond_rate_met"] = [rate([internals[i] for i in met_idx], k) for k in range(4)]
+        s["tp_first_met_conditions"] = internals[met_idx[0]]["conditions"] if met_idx else None
 
     # 與參考日期對照
     for key in ("peak", "trough"):
@@ -195,7 +266,15 @@ def _signed_days(v: Optional[int]) -> str:
     return f"{v:+d} 天"
 
 
-def render_report(results: list[dict[str, Any]], generated: str) -> str:
+COND_NAMES = [
+    "Fed 資產負債表擴張，或降息 ≥50bp",
+    "壓力指標區塊自高點回落 ≥15 分",
+    "VIX 自 20 日峰值回落 ≥30%",
+    "S&P 500 的 60 日低點在 20 日以前",
+]
+
+
+def render_report(results: list[dict[str, Any]], generated: str, sens: Optional[dict[str, Any]] = None) -> str:
     L: list[str] = []
     L.append("# 歷史回測報告\n")
     L.append(f"產生時間：{generated}\n")
@@ -208,11 +287,11 @@ def render_report(results: list[dict[str, Any]], generated: str) -> str:
     L.append("- 輸出只含分數、狀態與日期，不含第三方原始數值。\n")
 
     L.append("## 總覽\n")
-    L.append("| 期間 | 交易日 | A 完整 | B 完整 | S&P 500 最大回檔 | A 首次偏空 | B 首次 ≥60 | 轉折確認首次成立 |")
+    L.append("| 期間 | 交易日 | A 狀態正常 | B 正常／僅供參考 | S&P 500 最大回檔 | A 首次偏空 | B 首次 ≥60 | 轉折確認首次成立 |")
     L.append("|---|---|---|---|---|---|---|---|")
     for r in results:
         L.append(
-            f"| {r['name']} | {r['days']} | {r['a_ok_pct']}% | {r['b_ok_pct']}% | "
+            f"| {r['name']} | {r['days']} | {r['a_ok_pct']}% | {r['b_ok_pct']}%／{r['b_ref_pct']}% | "
             f"{_fmt(r.get('max_drawdown_pct'), '%')} | {_fmt(r['a_first_bearish'])} | "
             f"{_fmt(r['b_first_60'])} | {_fmt(r['tp_first_met'])} |"
         )
@@ -252,7 +331,39 @@ def render_report(results: list[dict[str, Any]], generated: str) -> str:
                  + (f"（相對低點 {_signed_days(r.get('tp_vs_trough_days'))}）" if r.get("trough") else "")
                  + f"，成立天數 {r['tp_met_days']}")
         L.append("- 轉折確認狀態分布：" + "、".join(f"{k} {v}" for k, v in r["tp_states"].items()))
+        if r["tp_met_ranges"]:
+            L.append("- 轉折確認成立區間：" + "；".join(r["tp_met_ranges"]))
+        if r["red_reasons"]:
+            L.append("- 股金同跌紅色的成因（天數）：" + "、".join(f"{k} {v}" for k, v in r["red_reasons"].items()))
+        if r.get("cond_rate_evaluated"):
+            L.append("")
+            L.append("**轉折確認的四項條件**（只統計「已評估」的日子，即近 60 日內 B 曾 ≥60）\n")
+            L.append("| 條件 | 已評估日子中成立比例 | 轉折確認成立日中成立比例 |")
+            L.append("|---|---|---|")
+            for k, name in enumerate(COND_NAMES):
+                L.append(f"| {name} | {_fmt(r['cond_rate_evaluated'][k], '%')} | {_fmt(r['cond_rate_met'][k], '%')} |")
+            if r.get("tp_first_met_conditions"):
+                flags = r["tp_first_met_conditions"]
+                text = "、".join(f"{COND_NAMES[k]}：{'是' if v else ('否' if v is False else '未知')}" for k, v in enumerate(flags))
+                L.append("")
+                L.append("- 首次成立當天各條件：" + text)
         L.append("")
+
+    if sens:
+        L.append("## 敏感度：股金同跌的紅色條件\n")
+        L.append("把紅色的確認條件換成不同的 VIX 門檻，各期間會有幾天紅色／黃色（格式：紅／黃）。歷史上沒有 HY OAS，所以不含利差條件。\n")
+        ids = [r["id"] for r in results]
+        names = {r["id"]: r["name"] for r in results}
+        L.append("| 規則 | " + " | ".join(names[i] for i in ids) + " |")
+        L.append("|---|" + "---|" * len(ids))
+        for v in sens["variants"]:
+            cells = []
+            for i in ids:
+                red, yellow = sens["table"][v].get(i, (0, 0))
+                cells.append(f"{red}／{yellow}")
+            L.append(f"| {v} | " + " | ".join(cells) + " |")
+        L.append("")
+        L.append("> 用這三段歷史調整門檻等於「用答案調參數」，結果只能當參考，不能當作門檻已經最佳化的證明。\n")
 
     L.append("## 怎麼讀這份報告\n")
     L.append("1. **2008、2020：** B 應該在低點前明顯升高；A 應該轉為偏空；股金同跌若發生在危機中應為紅色。")
@@ -311,21 +422,22 @@ def main() -> int:
         return 1
     S = apply_publication_lag(raw)
 
-    results, all_rows = [], []
+    results, all_rows, internals_by_ep = [], [], {}
     for ep in EPISODES:
         fs.log(f"重播：{ep['name']}（{ep['start']} ～ {ep['end']}）")
-        rows = run_episode(S, cfg, ep["start"], ep["end"])
+        rows, internals = run_episode_detailed(S, cfg, ep["start"], ep["end"])
         if not rows:
             fs.log("  這段期間沒有資料，略過。")
             continue
-        results.append(summarize(rows, ep, S["spx"]))
+        results.append(summarize(rows, ep, S["spx"], internals))
+        internals_by_ep[ep["id"]] = internals
         all_rows.extend({"episode": ep["id"], **r} for r in rows)
 
     if not results:
         fs.log("沒有任何期間可以回測。")
         return 1
     generated = pd.Timestamp.now("UTC").strftime("%Y-%m-%d %H:%M UTC")
-    write_outputs(all_rows, render_report(results, generated))
+    write_outputs(all_rows, render_report(results, generated, sensitivity(internals_by_ep)))
     fs.log("已寫入 backtest/report.md 與 backtest/daily.csv")
     return 0
 
