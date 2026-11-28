@@ -177,7 +177,7 @@ class ScenarioTests(unittest.TestCase):
         gold = S["gold"].copy()
         gold.iloc[-1] = gold.iloc[-11] * 0.96  # -4%
         vix = S["vix"].copy()
-        vix.iloc[-1] = 35.0
+        vix.iloc[-1] = 40.0
         S.update({"spx": spx, "gold": gold, "vix": vix})
         self.assertEqual(self.build(S)["flags"]["gold_equity_drop"]["state"], "red")
 

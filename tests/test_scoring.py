@@ -224,11 +224,11 @@ class GoldEquityFlagTests(unittest.TestCase):
 
     def test_red_by_each_confirmation(self):
         self.assertEqual(self.f(-5, -4, stress=65, vix=20, hy=0.1)["state"], "red")
-        self.assertEqual(self.f(-5, -4, stress=30, vix=31, hy=0.1)["state"], "red")
+        self.assertEqual(self.f(-5, -4, stress=30, vix=36, hy=0.1)["state"], "red")
         self.assertEqual(self.f(-5, -4, stress=30, vix=20, hy=0.5)["state"], "red")
 
-    def test_vix_exactly_30_is_not_red(self):
-        self.assertEqual(self.f(-5, -4, stress=30, vix=30, hy=0)["state"], "yellow")
+    def test_vix_exactly_35_is_not_red(self):
+        self.assertEqual(self.f(-5, -4, stress=30, vix=35, hy=0)["state"], "yellow")
 
     def test_yellow_2022_style(self):
         r = self.f(-6, -5, stress=35, vix=25, hy=0.2)
@@ -317,6 +317,10 @@ class ConfigSanityTests(unittest.TestCase):
     def test_indicator_weights_sum_to_one_per_group(self):
         for group in CFG["regime"]["dimensions"] + CFG["stress"]["blocks"]:
             self.assertAlmostEqual(sum(i["weight"] for i in group["indicators"]), 1.0, msg=group["id"])
+
+    def test_gold_equity_vix_threshold_is_35(self):
+        # 2026-11 回測：VIX>30 在 2022 年只製造誤報，2008、2020 不受影響，調為 35
+        self.assertEqual(CFG["flags"]["gold_equity_drop"]["red_if_any"]["vix_min"], 35)
 
     def test_anchors_valid(self):
         for group in CFG["regime"]["dimensions"] + CFG["stress"]["blocks"]:
