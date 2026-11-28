@@ -1,0 +1,48 @@
+name: backtest
+
+# 只能手動觸發（Actions 頁面 -> backtest -> Run workflow），不會自動執行
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backtest
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝相依套件
+        run: pip install -r requirements.txt
+
+      - name: 單元測試
+        run: python -m unittest discover -s tests
+
+      - name: 執行回測
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python scripts/backtest.py
+
+      - name: 提交回測結果
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backtest/report.md backtest/daily.csv
+          if git diff --cached --quiet; then
+            echo "回測結果沒有變動"
+          else
+            git commit -m "backtest: update report $(date -u +%Y-%m-%d)"
+            git push
+          fi
