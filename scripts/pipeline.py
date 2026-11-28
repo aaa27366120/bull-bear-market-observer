@@ -260,7 +260,10 @@ def compute_flags_detailed(S, cfg, today, features, stress, hist):
         spx_ret is not None and gold_ret is not None
         and spx_ret <= fg["spx_return_max_pct"] and gold_ret <= fg["gold_return_max_pct"]
     )
-    details = {"gold_triggered": bool(triggered), "had_high": had_high, "conditions": [c1, c2, c3, c4]}
+    details = {
+        "gold_triggered": bool(triggered), "had_high": had_high, "conditions": [c1, c2, c3, c4],
+        "hist_max": max(totals) if totals else None,
+    }
     return flags, details
 
 
