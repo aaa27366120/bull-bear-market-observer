@@ -174,7 +174,7 @@ flags:
     gold_return_max_pct: -3     # 黃金 <= -3%
     red_if_any:
       stress_score_min: 60
-      vix_min: 30               # VIX > 30
+      vix_min: 35               # VIX > 35（2026-11 回測後由 30 調為 35，見 backtest 報告）
       hy_oas_week_change_min_pp: 0.5
   turning_point:
     lookback_trading_days: 60
