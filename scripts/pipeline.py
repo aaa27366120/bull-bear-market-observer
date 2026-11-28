@@ -193,7 +193,8 @@ def _ret_trading_days(s: Optional[pd.Series], key: str, cfg: dict[str, Any], tod
     return _pct(s.iloc[-1], s.iloc[-1 - n])
 
 
-def compute_flags(S, cfg, today, features, stress, hist) -> dict[str, Any]:
+def compute_flags_detailed(S, cfg, today, features, stress, hist):
+    """回傳 (旗標, 內部細節)。細節含第三方資料衍生的數值，只供回測診斷，不得寫入公開輸出或日誌。"""
     S = {k: clean(v) for k, v in S.items()}
     fg = cfg["flags"]["gold_equity_drop"]
     tp = cfg["flags"]["turning_point"]
@@ -254,7 +255,17 @@ def compute_flags(S, cfg, today, features, stress, hist) -> dict[str, Any]:
         c4 = bool(days_since_low >= tp["no_new_low_days"])
 
     turning = scoring.turning_point_flag(cfg, had_high, [c1, c2, c3, c4])
-    return {"gold_equity_drop": gold_flag, "turning_point": turning}
+    flags = {"gold_equity_drop": gold_flag, "turning_point": turning}
+    triggered = (
+        spx_ret is not None and gold_ret is not None
+        and spx_ret <= fg["spx_return_max_pct"] and gold_ret <= fg["gold_return_max_pct"]
+    )
+    details = {"gold_triggered": bool(triggered), "had_high": had_high, "conditions": [c1, c2, c3, c4]}
+    return flags, details
+
+
+def compute_flags(S, cfg, today, features, stress, hist) -> dict[str, Any]:
+    return compute_flags_detailed(S, cfg, today, features, stress, hist)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -262,11 +273,18 @@ def compute_flags(S, cfg, today, features, stress, hist) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def build(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], today: date, generated_at: str) -> dict[str, Any]:
-    """回傳公開輸出（可直接寫成 data.json）。"""
+def build_detailed(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], today: date, generated_at: str):
+    """回傳 (公開輸出, 內部細節)。內部細節含原始特徵值，只供回測診斷，絕不可寫入檔案或印出。"""
     features, as_of = compute_features(S, cfg, today)
     regime = scoring.score_regime(cfg, features)
     stress = scoring.score_stress(cfg, features)
     hist = stress_history(S, cfg, today)
-    flags = compute_flags(S, cfg, today, features, stress, hist)
-    return scoring.to_public(regime, stress, flags, generated_at, as_of)
+    flags, flag_details = compute_flags_detailed(S, cfg, today, features, stress, hist)
+    public = scoring.to_public(regime, stress, flags, generated_at, as_of)
+    details = {"features": features, "stress_score": stress["score"], **flag_details}
+    return public, details
+
+
+def build(S: dict[str, Optional[pd.Series]], cfg: dict[str, Any], today: date, generated_at: str) -> dict[str, Any]:
+    """回傳公開輸出（可直接寫成 data.json）。"""
+    return build_detailed(S, cfg, today, generated_at)[0]
