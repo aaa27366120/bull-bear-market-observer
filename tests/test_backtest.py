@@ -106,5 +106,105 @@ class CalmControlTests(unittest.TestCase):
         self.assertLess(summary["b_max"][0], 20)
 
 
+class DiagnosticsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.S = bt.apply_publication_lag(make("crisis"))
+        d = dates(cls.S)
+        cls.rows, cls.internals = bt.run_episode_detailed(cls.S, CFG, d[200], d[399])
+        ep = {"id": "x", "name": "模擬危機", "peak": d[200], "trough": d[340], "events": {}}
+        cls.summary = bt.summarize(cls.rows, ep, cls.S["spx"], cls.internals)
+
+    def test_internals_align_with_rows(self):
+        self.assertEqual(len(self.rows), len(self.internals))
+
+    def test_run_episode_wrapper_matches_detailed(self):
+        d = dates(self.S)
+        self.assertEqual(bt.run_episode(self.S, CFG, d[380], d[399]), self.rows[-20:])
+
+    def test_last_day_has_all_four_conditions_true(self):
+        self.assertEqual(self.internals[-1]["conditions"], [True, True, True, True])
+
+    def test_summary_has_condition_diagnostics(self):
+        self.assertEqual(len(self.summary["cond_rate_evaluated"]), 4)
+        self.assertEqual(len(self.summary["cond_rate_met"]), 4)
+        self.assertEqual(self.summary["tp_first_met_conditions"].count(True) >= 3, True)
+        self.assertTrue(self.summary["tp_met_ranges"])
+        # 轉折確認成立的日子，至少有 3 項條件成立，所以每項的成立比例都不會是 0
+        self.assertTrue(all(r is not None for r in self.summary["cond_rate_met"]))
+
+    def test_b_reference_share_is_reported(self):
+        self.assertIn("b_ref_pct", self.summary)
+
+    def test_red_reason_vix_only(self):
+        S = make("calm")
+        spx, gold, vix = S["spx"].copy(), S["gold"].copy(), S["vix"].copy()
+        spx.iloc[-1] = spx.iloc[-11] * 0.94
+        gold.iloc[-1] = gold.iloc[-11] * 0.96
+        vix.iloc[-2] = 35.0  # 公布落後 1 天，倒數第二筆在最後一個交易日才看得到
+        S.update({"spx": spx, "gold": gold, "vix": vix})
+        L = bt.apply_publication_lag(S)
+        d = dates(L)
+        rows, its = bt.run_episode_detailed(L, CFG, d[-1], d[-1])
+        self.assertEqual(rows[0]["gold_equity"], "red")
+        self.assertEqual(rows[0]["red_reason"], "VIX>30")
+        self.assertTrue(its[0]["triggered"])
+
+    def test_csv_rows_contain_no_raw_values(self):
+        for row in self.rows:
+            self.assertNotIn("vix", row)
+            self.assertEqual(
+                set(row),
+                {"date", "a_score", "a_state", "a_status", "a_completeness", "b_score", "b_label",
+                 "b_status", "b_completeness", "gold_equity", "red_reason", "turning_point"},
+            )
+
+
+class SensitivityTests(unittest.TestCase):
+    def it(self, triggered, b, vix):
+        return {"triggered": triggered, "b_score": b, "vix": vix, "had_high": None, "conditions": [None] * 4}
+
+    def test_classification(self):
+        c = bt.classify_gold_flag
+        self.assertEqual(c(self.it(False, 90, 50), 60, 30), "none")
+        self.assertEqual(c(self.it(True, 70, 20), 60, 30), "red")       # B 觸發
+        self.assertEqual(c(self.it(True, 40, 35), 60, 30), "red")       # VIX 觸發
+        self.assertEqual(c(self.it(True, 40, 35), 60, 40), "yellow")    # 提高 VIX 門檻後變黃
+        self.assertEqual(c(self.it(True, 40, 35), 60, None), "yellow")  # 不使用 VIX
+        self.assertEqual(c(self.it(True, None, None), 60, 30), "yellow")
+        self.assertEqual(c(self.it(True, 40, 30), 60, 30), "yellow")    # VIX 剛好 30 不算
+
+    def test_table_counts(self):
+        its = [self.it(True, 40, 35), self.it(True, 70, 20), self.it(True, 40, 25), self.it(False, 90, 50)]
+        t = bt.sensitivity({"e": its})["table"]
+        self.assertEqual(t["基準：B≥60 或 VIX>30"]["e"], (2, 1))
+        self.assertEqual(t["B≥60 或 VIX>35"]["e"], (1, 2))
+        self.assertEqual(t["B≥60 或 VIX>40"]["e"], (1, 2))
+        self.assertEqual(t["只看 B≥60（不用 VIX）"]["e"], (1, 2))
+
+    def test_report_includes_new_sections(self):
+        S = bt.apply_publication_lag(make("crisis"))
+        d = dates(S)
+        rows, its = bt.run_episode_detailed(S, CFG, d[300], d[399])
+        ep = {"id": "x", "name": "模擬危機", "peak": d[300], "trough": d[340], "events": {}}
+        res = [bt.summarize(rows, ep, S["spx"], its)]
+        text = bt.render_report(res, "測試", bt.sensitivity({"x": its}))
+        for h in ("## 敏感度：股金同跌的紅色條件", "轉折確認的四項條件", "轉折確認成立區間", "B 正常／僅供參考"):
+            self.assertIn(h, text)
+        self.assertNotIn("nan", text.lower())
+
+
+class BuildDetailedTests(unittest.TestCase):
+    def test_public_output_identical_to_build(self):
+        import pipeline
+        S = make("calm")
+        from datetime import date
+        a = pipeline.build(S, CFG, date(2026, 11, 27), "t")
+        b, details = pipeline.build_detailed(S, CFG, date(2026, 11, 27), "t")
+        self.assertEqual(a, b)
+        self.assertEqual(len(details["conditions"]), 4)
+        self.assertIn("features", details)
+
+
 if __name__ == "__main__":
     unittest.main()
